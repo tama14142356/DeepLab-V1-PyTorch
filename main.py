@@ -1,3 +1,6 @@
+import datetime
+import os
+
 import torch
 import torch.nn as nn
 import torch.utils.data
@@ -15,6 +18,12 @@ from utils import crf, losses
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device_ids = [0]
 
+dt_now = datetime.datetime.now()
+d_str = dt_now.strftime('%Y%m%d_%H%M%S')
+log_root = f"./results/exp/{d_str}"
+
+epochs = 100
+# epochs = 10
 batch_size = 30 # 30 for "step", 10 for 'poly'
 lr = 1e-3
 weight_decay = 5e-4
@@ -23,10 +32,13 @@ num_update_iters = 10 # 4000 for "step", 10 for 'poly'
 num_save_iters = 1000
 num_print_iters = 100
 init_model_path = './data/deeplab_largeFOV.pth'
-log_path = './exp/log.txt'
-model_path_save = './exp/model_last_'
-root_dir_path = './VOCdevkit/VOC2012'
-pred_dir_path = './exp/labels/'
+log_path = f'{log_root}/log.txt'
+model_path_save = f'{log_root}/model_last_'
+root_dir_path = './results/datasets/VOCdevkit/VOC2012'
+pred_dir_path = f'{log_root}/labels/'
+
+os.makedirs(log_root, exist_ok=True)
+os.makedirs(pred_dir_path, exist_ok=True)
 
 def get_params(model, key):
     if key == '1x':
@@ -86,8 +98,8 @@ def train():
 
     print('Set data...')
     train_loader = torch.utils.data.DataLoader(
-        VOCDataset(split='train_aug', crop_size=321, is_scale=False, is_flip=True),
-        # VOCDataset(split='train_aug', crop_size=321, is_scale=True, is_flip=True), # for val mIoU = 69.6
+        VOCDataset(root=root_dir_path, split='train_aug', crop_size=321, is_scale=False, is_flip=True),
+        # VOCDataset(root=root_dir_path, split='train_aug', crop_size=321, is_scale=True, is_flip=True), # for val mIoU = 69.6
         batch_size=batch_size,
         shuffle=True,
         num_workers=4,
@@ -102,7 +114,7 @@ def train():
     iters = 0
     log_file = open(log_path, 'w')
     loss_iters, accuracy_iters = [], []
-    for epoch in range(1, 100):
+    for epoch in range(1, epochs):
         for iter_id, batch in enumerate(train_loader):
             loss_seg, accuracy = losses.build_metrics(model, batch, device)
             optimizer.zero_grad()
@@ -115,21 +127,23 @@ def train():
             iters += 1
             if iters % num_print_iters == 0:
                 cur_time = strftime("%Y-%m-%d %H:%M:%S", localtime())
-                log_str = 'iters:{:4}, loss:{:6,.4f}, accuracy:{:5,.4}'.format(iters, np.mean(loss_iters), np.mean(accuracy_iters))
+                # log_str = 'iters:{:4}, loss:{:6,.4f}, accuracy:{:5,.4}'.format(iters, np.mean(loss_iters), np.mean(accuracy_iters))
+                log_str = 'epoch:{:3} '.format(epoch)
+                log_str += 'iters:{:4} iter_id:{:4}/{:4}, loss:{:6,.4f}, accuracy:{:5,.4}'.format(iters, iter_id, len(train_loader), np.mean(loss_iters), np.mean(accuracy_iters))
                 print(log_str)
                 log_file.write(cur_time + ' ' + log_str + '\n')
                 log_file.flush()
                 loss_iters = []
                 accuracy_iters = []
-            
+
             if iters % num_save_iters == 0:
                 torch.save(model.state_dict(), model_path_save + str(iters) + '.pth')
-            
+
             # step
             # if iters == num_update_iters or iters == num_update_iters + 1000:
             #     for group in optimizer.param_groups:
             #         group["lr"] *= 0.1
-            
+
             # poly
             for group in optimizer.param_groups:
                 group["lr"] = group['initial_lr'] * (1 - float(iters) / num_max_iters) ** 0.9
@@ -148,7 +162,7 @@ def test(model_path_test, use_crf):
     model.eval()
     model = model.to(device)
     val_loader = torch.utils.data.DataLoader(
-        VOCDataset(split='val', crop_size=crop_size, label_dir_path='SegmentationClassAug', is_scale=False, is_flip=False),
+        VOCDataset(root=root_dir_path, split='val', crop_size=crop_size, label_dir_path='SegmentationClassAug', is_scale=False, is_flip=False),
         batch_size=batch_size,
         shuffle=False,
         num_workers=4,
@@ -203,7 +217,7 @@ def test(model_path_test, use_crf):
         probs = nn.functional.softmax(logits, dim=1) # shape = [batch_size, C, H, W]
 
         outputs = torch.argmax(probs, dim=1) # shape = [batch_size, H, W]
-        
+
         loss_seg = CEL(logits, labels)
         accuracy = float(torch.eq(outputs, labels).sum().cpu()) / (len(image_ids) * logits.shape[2] * logits.shape[3])
         loss_iters.append(float(loss_seg.cpu()))
@@ -247,7 +261,7 @@ def test(model_path_test, use_crf):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--type', default='test', help='train or test model')
-    parser.add_argument('--model_path_test', default='./exp/model_last_20000.pth', help='test model path')
+    parser.add_argument('--model_path_test', default='./exp/model_last_20000_poly2.pth', help='test model path')
     parser.add_argument('--use_crf', default=False, action='store_true', help='use crf or not')
     args = parser.parse_args()
 
@@ -255,4 +269,3 @@ if __name__ == "__main__":
         train()
     else:
         test(args.model_path_test, args.use_crf)
-
