@@ -1,17 +1,27 @@
-import numpy as np
-import torch
-from PIL import Image, ImageDraw
 import os
-import numpy as np
-import cv2
 import random
 
+import cv2
+import numpy as np
+import torch
+from PIL import Image
+# from PIL import ImageDraw
+
+
 class VOCDataset(torch.utils.data.Dataset):
-    def __init__(self, root='/home/ubuntu/workshops/datasets/voc12/VOCdevkit/VOC2012/', split='train_aug', crop_size=321, label_dir_path='SegmentationClassAug', is_scale=True, is_flip=True):
+
+    def __init__(self,
+                 root='/home/ubuntu/workshops/datasets/voc12/VOCdevkit/VOC2012/',
+                 split='train_aug',
+                 crop_size=321,
+                 label_dir_path='SegmentationClassAug',
+                 is_scale=True,
+                 is_flip=True):
         self.root = root
         self.ann_dir_path = os.path.join(self.root, 'Annotations')
         self.image_dir_path = os.path.join(self.root, 'JPEGImages')
-        self.label_dir_path = os.path.join(self.root, label_dir_path) # SegmentationClassAug_Round1
+        self.label_dir_path = os.path.join(
+            self.root, label_dir_path)  # SegmentationClassAug_Round1
         self.id_path = os.path.join('./list', split + '.txt')
 
         self.image_ids = [i.strip() for i in open(self.id_path) if not i.strip() == ' ']
@@ -26,7 +36,7 @@ class VOCDataset(torch.utils.data.Dataset):
         self.is_augment = True
         self.is_scale = is_scale
         self.is_flip = is_flip
-    
+
     def __len__(self):
         return len(self.image_ids)
 
@@ -40,11 +50,11 @@ class VOCDataset(torch.utils.data.Dataset):
 
         if self.is_augment:
             image, label = self._augmentation(image, label)
-        
+
         image -= self.mean_bgr
         image = image.transpose(2, 0, 1)
         return image_id, image.astype(np.float32), label.astype(np.int64)
-    
+
     def _augmentation(self, image, label):
         # Scaling
         if self.is_scale:
@@ -91,6 +101,7 @@ class VOCDataset(torch.utils.data.Dataset):
                 image = np.fliplr(image).copy()  # HWC
                 label = np.fliplr(label).copy()  # HW
         return image, label
+
 
 if __name__ == "__main__":
     dataset = VOCDataset()

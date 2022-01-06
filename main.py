@@ -24,11 +24,11 @@ log_root = f"./results/exp/{d_str}"
 
 epochs = 100
 # epochs = 10
-batch_size = 30 # 30 for "step", 10 for 'poly'
+batch_size = 30  # 30 for "step", 10 for 'poly'
 lr = 1e-3
 weight_decay = 5e-4
-num_max_iters = 20000 # 6000 for "step", 20000 for 'poly'
-num_update_iters = 10 # 4000 for "step", 10 for 'poly'
+num_max_iters = 20000  # 6000 for "step", 20000 for 'poly'
+num_update_iters = 10  # 4000 for "step", 10 for 'poly'
 num_save_iters = 1000
 num_print_iters = 100
 init_model_path = './data/deeplab_largeFOV.pth'
@@ -39,6 +39,7 @@ pred_dir_path = f'{log_root}/labels/'
 
 os.makedirs(log_root, exist_ok=True)
 os.makedirs(pred_dir_path, exist_ok=True)
+
 
 def get_params(model, key):
     if key == '1x':
@@ -64,13 +65,14 @@ def get_params(model, key):
                 if m[0] == 'features.38':
                     yield m[1].bias
 
+
 def train():
     model = vgg.VGG16_LargeFOV()
     model.load_state_dict(torch.load(init_model_path))
     model = torch.nn.DataParallel(model, device_ids=device_ids)
     model = model.to(device)
     optimizer = torch.optim.SGD(
-        params = [
+        params=[
             {
                 'params': get_params(model, '1x'),
                 'lr': lr,
@@ -92,19 +94,29 @@ def train():
                 'weight_decay': 0
             },
         ],
-        momentum = 0.9,
+        momentum=0.9,
     )
-    # optimizer = torch.optim.SGD(params=model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay) # for val mIoU = 69.6
+    # optimizer = torch.optim.SGD(params=model.parameters(),
+    #                             lr=lr,
+    #                             momentum=0.9,
+    #                             weight_decay=weight_decay)  # for val mIoU = 69.6
 
     print('Set data...')
     train_loader = torch.utils.data.DataLoader(
-        VOCDataset(root=root_dir_path, split='train_aug', crop_size=321, is_scale=False, is_flip=True),
-        # VOCDataset(root=root_dir_path, split='train_aug', crop_size=321, is_scale=True, is_flip=True), # for val mIoU = 69.6
+        VOCDataset(root=root_dir_path,
+                   split='train_aug',
+                   crop_size=321,
+                   is_scale=False,
+                   is_flip=True),
+        # VOCDataset(root=root_dir_path,
+        #            split='train_aug',
+        #            crop_size=321,
+        #            is_scale=True,
+        #            is_flip=True),  # for val mIoU = 69.6
         batch_size=batch_size,
         shuffle=True,
         num_workers=4,
-        drop_last=True
-    )
+        drop_last=True)
 
     # Learning rate policy
     for group in optimizer.param_groups:
@@ -127,9 +139,13 @@ def train():
             iters += 1
             if iters % num_print_iters == 0:
                 cur_time = strftime("%Y-%m-%d %H:%M:%S", localtime())
-                # log_str = 'iters:{:4}, loss:{:6,.4f}, accuracy:{:5,.4}'.format(iters, np.mean(loss_iters), np.mean(accuracy_iters))
+                # log_str = 'iters:{:4}, loss:{:6,.4f}, accuracy:{:5,.4}'.format(
+                #     iters, np.mean(loss_iters), np.mean(accuracy_iters))
                 log_str = 'epoch:{:3} '.format(epoch)
-                log_str += 'iters:{:4} iter_id:{:4}/{:4}, loss:{:6,.4f}, accuracy:{:5,.4}'.format(iters, iter_id, len(train_loader), np.mean(loss_iters), np.mean(accuracy_iters))
+                log_str += 'iters:{:4} iter_id:{:4}/{:4}, '.format(
+                    iters, iter_id, len(train_loader))
+                log_str += 'loss:{:6,.4f}, accuracy:{:5,.4}'.format(
+                    np.mean(loss_iters), np.mean(accuracy_iters))
                 print(log_str)
                 log_file.write(cur_time + ' ' + log_str + '\n')
                 log_file.flush()
@@ -146,7 +162,8 @@ def train():
 
             # poly
             for group in optimizer.param_groups:
-                group["lr"] = group['initial_lr'] * (1 - float(iters) / num_max_iters) ** 0.9
+                group["lr"] = group['initial_lr'] * (1 -
+                                                     float(iters) / num_max_iters)**0.9
 
             if iters == num_max_iters:
                 exit()
@@ -161,50 +178,39 @@ def test(model_path_test, use_crf):
     model.load_state_dict(torch.load(model_path_test))
     model.eval()
     model = model.to(device)
-    val_loader = torch.utils.data.DataLoader(
-        VOCDataset(root=root_dir_path, split='val', crop_size=crop_size, label_dir_path='SegmentationClassAug', is_scale=False, is_flip=False),
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=4,
-        drop_last=False
-    )
+    val_loader = torch.utils.data.DataLoader(VOCDataset(
+        root=root_dir_path,
+        split='val',
+        crop_size=crop_size,
+        label_dir_path='SegmentationClassAug',
+        is_scale=False,
+        is_flip=False),
+                                             batch_size=batch_size,
+                                             shuffle=False,
+                                             num_workers=4,
+                                             drop_last=False)
 
     # DenseCRF
     post_processor = crf.DenseCRF(
-        iter_max=10,    # 10
-        pos_xy_std=3,   # 3
-        pos_w=3,        # 3
+        iter_max=10,  # 10
+        pos_xy_std=3,  # 3
+        pos_w=3,  # 3
         bi_xy_std=140,  # 121, 140
-        bi_rgb_std=5,   # 5, 5
-        bi_w=5,         # 4, 5
+        bi_rgb_std=5,  # 5, 5
+        bi_w=5,  # 4, 5
     )
 
     img_dir_path = root_dir_path + '/JPEGImages/'
     # class palette for test
     palette = []
     for i in range(256):
-        palette.extend((i,i,i))
-    palette[:3*21] = np.array([[0, 0, 0],
-                            [128, 0, 0],
-                            [0, 128, 0],
-                            [128, 128, 0],
-                            [0, 0, 128],
-                            [128, 0, 128],
-                            [0, 128, 128],
-                            [128, 128, 128],
-                            [64, 0, 0],
-                            [192, 0, 0],
-                            [64, 128, 0],
-                            [192, 128, 0],
-                            [64, 0, 128],
-                            [192, 0, 128],
-                            [64, 128, 128],
-                            [192, 128, 128],
-                            [0, 64, 0],
-                            [128, 64, 0],
-                            [0, 192, 0],
-                            [128, 192, 0],
-                            [0, 64, 128]], dtype='uint8').flatten()
+        palette.extend((i, i, i))
+    palette[:3 * 21] = np.array(
+        [[0, 0, 0], [128, 0, 0], [0, 128, 0], [128, 128, 0], [0, 0, 128], [128, 0, 128],
+         [0, 128, 128], [128, 128, 128], [64, 0, 0], [192, 0, 0], [64, 128, 0],
+         [192, 128, 0], [64, 0, 128], [192, 0, 128], [64, 128, 128], [192, 128, 128],
+         [0, 64, 0], [128, 64, 0], [0, 192, 0], [128, 192, 0], [0, 64, 128]],
+        dtype='uint8').flatten()
     times = 0.0
     index = 0
     loss_iters, accuracy_iters = [], []
@@ -214,18 +220,20 @@ def test(model_path_test, use_crf):
         images = images.to(device)
         labels = losses.resize_labels(labels, size=(crop_size, crop_size)).to(device)
         logits = model(images)
-        probs = nn.functional.softmax(logits, dim=1) # shape = [batch_size, C, H, W]
+        probs = nn.functional.softmax(logits, dim=1)  # shape = [batch_size, C, H, W]
 
-        outputs = torch.argmax(probs, dim=1) # shape = [batch_size, H, W]
+        outputs = torch.argmax(probs, dim=1)  # shape = [batch_size, H, W]
 
         loss_seg = CEL(logits, labels)
-        accuracy = float(torch.eq(outputs, labels).sum().cpu()) / (len(image_ids) * logits.shape[2] * logits.shape[3])
+        accuracy = float(torch.eq(outputs, labels).sum().cpu()) / (
+            len(image_ids) * logits.shape[2] * logits.shape[3])
         loss_iters.append(float(loss_seg.cpu()))
         accuracy_iters.append(float(accuracy))
 
         for i in range(len(image_ids)):
             if is_post_process:
-                raw_image = cv2.imread(img_dir_path + image_ids[i] + '.jpg', cv2.IMREAD_COLOR) # shape = [H, W, 3]
+                raw_image = cv2.imread(img_dir_path + image_ids[i] + '.jpg',
+                                       cv2.IMREAD_COLOR)  # shape = [H, W, 3]
                 h, w = raw_image.shape[:2]
                 pad_h = max(513 - h, 0)
                 pad_w = max(513 - w, 0)
@@ -249,7 +257,8 @@ def test(model_path_test, use_crf):
             img_label.putpalette(palette)
             img_label.save(pred_dir_path + image_ids[i] + '.png')
 
-            accuracy = float(torch.eq(outputs[i], labels[i]).sum().cpu()) / (logits.shape[2] * logits.shape[3])
+            accuracy = float(torch.eq(outputs[i], labels[i]).sum().cpu()) / (
+                logits.shape[2] * logits.shape[3])
             index += 1
             if index % 200 == 0:
                 print(image_ids[i], float('%.4f' % accuracy), index)
@@ -258,11 +267,17 @@ def test(model_path_test, use_crf):
     print('val loss = %s, acc = %s' % (np.mean(loss_iters), np.mean(accuracy_iters)))
     print(model_path_test)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--type', default='test', help='train or test model')
-    parser.add_argument('--model_path_test', default='./exp/model_last_20000_poly2.pth', help='test model path')
-    parser.add_argument('--use_crf', default=False, action='store_true', help='use crf or not')
+    parser.add_argument('--model_path_test',
+                        default='./exp/model_last_20000_poly2.pth',
+                        help='test model path')
+    parser.add_argument('--use_crf',
+                        default=False,
+                        action='store_true',
+                        help='use crf or not')
     args = parser.parse_args()
 
     if args.type == 'train':

@@ -19,6 +19,7 @@ def resize_labels(labels, size):
     new_labels = torch.LongTensor(new_labels)
     return new_labels
 
+
 def build_metrics(model, batch, device):
     CEL = nn.CrossEntropyLoss(ignore_index=255).to(device)
 
@@ -29,7 +30,7 @@ def build_metrics(model, batch, device):
     loss_seg = CEL(logits, labels)
 
     preds = torch.argmax(logits, dim=1)
-    accuracy = float(torch.eq(preds, labels).sum().cpu()) / (len(image_ids) * logits.shape[2] * logits.shape[3])
+    accuracy = float(torch.eq(preds, labels).sum().cpu()) / (
+        len(image_ids) * logits.shape[2] * logits.shape[3])
 
     return loss_seg, accuracy
-                
