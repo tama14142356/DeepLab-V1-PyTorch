@@ -15,30 +15,7 @@ from datasets import VOCDataset
 from nets import vgg
 from utils import crf, losses
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device_ids = [0]
-
-dt_now = datetime.datetime.now()
-d_str = dt_now.strftime('%Y%m%d_%H%M%S')
-log_root = f"./results/exp/{d_str}"
-
-epochs = 100
-# epochs = 10
-batch_size = 30  # 30 for "step", 10 for 'poly'
-lr = 1e-3
-weight_decay = 5e-4
-num_max_iters = 20000  # 6000 for "step", 20000 for 'poly'
-num_update_iters = 10  # 4000 for "step", 10 for 'poly'
-num_save_iters = 1000
-num_print_iters = 100
-init_model_path = './data/deeplab_largeFOV.pth'
-log_path = f'{log_root}/log.txt'
-model_path_save = f'{log_root}/model_last_'
 root_dir_path = './results/datasets/VOCdevkit/VOC2012'
-pred_dir_path = f'{log_root}/labels/'
-
-os.makedirs(log_root, exist_ok=True)
-os.makedirs(pred_dir_path, exist_ok=True)
 
 
 def get_params(model, key):
@@ -66,7 +43,21 @@ def get_params(model, key):
                     yield m[1].bias
 
 
-def train():
+def train(log_root):
+    epochs = 100
+    # epochs = 10
+    batch_size = 30  # 30 for "step", 10 for 'poly'
+    lr = 1e-3
+    weight_decay = 5e-4
+    num_max_iters = 20000  # 6000 for "step", 20000 for 'poly'
+    # num_update_iters = 10  # 4000 for "step", 10 for 'poly'
+    num_save_iters = 1000
+    num_print_iters = 100
+    init_model_path = './data/deeplab_largeFOV.pth'
+
+    log_path = f'{log_root}/log.txt'
+    model_path_save = f'{log_root}/model_last_'
+
     model = vgg.VGG16_LargeFOV()
     model.load_state_dict(torch.load(init_model_path))
     model = torch.nn.DataParallel(model, device_ids=device_ids)
@@ -169,10 +160,13 @@ def train():
                 exit()
 
 
-def test(model_path_test, use_crf):
+def test(model_path_test, use_crf, log_root):
     batch_size = 2
     is_post_process = use_crf
     crop_size = 513
+    pred_dir_path = f'{log_root}/labels/'
+    os.makedirs(pred_dir_path, exist_ok=True)
+
     model = vgg.VGG16_LargeFOV(input_size=crop_size, split='test')
     model = torch.nn.DataParallel(model, device_ids=device_ids)
     model.load_state_dict(torch.load(model_path_test))
@@ -269,7 +263,13 @@ def test(model_path_test, use_crf):
 
 
 if __name__ == "__main__":
+    dt_now = datetime.datetime.now()
+    d_str = dt_now.strftime('%Y%m%d_%H%M%S')
+
     parser = argparse.ArgumentParser()
+    parser.add_argument('--log_root',
+                        default=f'./results/exp/{d_str}',
+                        help='test model path')
     parser.add_argument('--type', default='test', help='train or test model')
     parser.add_argument('--model_path_test',
                         default='./exp/model_last_20000_poly2.pth',
@@ -280,7 +280,13 @@ if __name__ == "__main__":
                         help='use crf or not')
     args = parser.parse_args()
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device_ids = [0]
+
+    log_root = args.log_root
+    os.makedirs(log_root, exist_ok=True)
+
     if args.type == 'train':
-        train()
+        train(log_root)
     else:
-        test(args.model_path_test, args.use_crf)
+        test(args.model_path_test, args.use_crf, log_root)
